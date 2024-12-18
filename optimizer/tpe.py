@@ -412,6 +412,11 @@ class TPEOptimizer(BaseOptimizer):
         for obj_name in self.constraints.keys():
             self.tpe_samplers[obj_name].update_observations(eval_config=eval_config, loss=results[obj_name])
 
+        # Log or store all additional metrics
+        for metric_name, value in results.items():
+            if metric_name not in [self.metric_name] + list(self.constraints.keys()):
+                self.log_additional_metrics(metric_name, value)
+
     def fetch_observations(self) -> Dict[str, np.ndarray]:
         observations = self.tpe_samplers[self.metric_name].observations
         for obj_name, val in self.constraints.items():
@@ -447,3 +452,12 @@ class TPEOptimizer(BaseOptimizer):
                        for dim, hp_name in enumerate(self.hp_names)}
 
         return self._revert_eval_config(eval_config=eval_config)
+
+    def log_additional_metrics(self, metric_name: str, value: float):
+        # Store additional metrics in a structured format
+        if not hasattr(self, 'additional_metrics'):
+            self.additional_metrics = {}
+        if metric_name not in self.additional_metrics:
+            self.additional_metrics[metric_name] = []
+        self.additional_metrics[metric_name].append(value)
+

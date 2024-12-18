@@ -186,6 +186,24 @@ def get_logger(file_name: str, logger_name: str) -> Logger:
     logger.addHandler(file_handler)
 
     return logger
+#
+# def get_logger(file_name: str, logger_name: str) -> Logger:
+#     subdirs = "/".join(file_name.split('/')[:-1])
+#     os.makedirs(f'log/{subdirs}', exist_ok=True)
+#
+#     file_path = f'log/{file_name}.log'
+#     fmt = "%(asctime)s [%(levelname)s/%(filename)s:%(lineno)d] %(message)s"
+#     logger = getLogger(logger_name)
+#
+#     # Check if logger already has handlers to avoid duplicates
+#     if not any(isinstance(h, FileHandler) and h.baseFilename == file_path for h in logger.handlers):
+#         file_handler = FileHandler(file_path, mode='a')
+#         file_handler.setLevel(DEBUG)
+#         file_handler.setFormatter(Formatter(fmt))
+#         logger.addHandler(file_handler)
+#
+#     logger.propagate = False
+#     return logger
 
 
 def extract_hyperparameter(eval_config: Dict[str, Any],
@@ -308,6 +326,9 @@ def revert_eval_config(eval_config: Dict[str, NumericType], config_space: CS.Con
         config = config_space.get_hyperparameter(hp_name)
         val = eval_config[hp_name]
 
+        # Debugging log for each hyperparameter and sampled value
+        #print(f"Processing {hp_name}: initial value = {val}")
+
         if is_categorical:
             converted_eval_config[hp_name] = config.choices[val]
         elif is_ordinal:
@@ -329,6 +350,10 @@ def revert_eval_config(eval_config: Dict[str, NumericType], config_space: CS.Con
                 lb = config.lower
                 q = 1 if q is None and dtype is int else q
                 val = np.round((val - lb) / q) * q + lb
+
+            # Safety check to clamp within bounds
+            val = max(config.lower, min(config.upper, val))
+            #print(f"Final value for {hp_name} after quantization and clamping: {val}")
 
             check_value_range(hp_name=hp_name, config=config, val=val)
 
