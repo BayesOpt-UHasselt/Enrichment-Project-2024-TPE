@@ -1,0 +1,7 @@
+ConfigSpace
+tensorflow>=2.0.0
+optuna==2.8.0
+ax
+ax-platform==0.2.2
+gpytorch==1.5.1
+hypermapper==2.2.8
