@@ -7,25 +7,37 @@ import os
 from util.utils import get_logger
 from optimizer import TPEOptimizer
 import json
-
-# # any changes that I introduce to the TPE implementation are made in the files stored in the location below
-# # the command below causes that the files from that location will be automatically used while calling TPE functions
-# sys.path.extend(['./scripts/tpe-single-opt_original/tpe'])
 import sys
-sys.path.extend(['./scripts/'])
+
+#####################################################################################
+# Define variables and create util functions
+#####################################################################################
+
+# constrained TPE code repo doesn't install anything into "...\envs\a_repo_name\Lib\site-packages"
+# so every module, function used here is accessed from this project folder
+# this behaviour is different than in plain vanilla TPE code repo
+# nevertheless, to be on the safe side, I modify the search path by inserting this project folder in the very first position
+
+project_path = os.path.dirname(os.path.abspath('something_meaningless'))
+sys.path.insert(0, os.path.dirname(os.path.abspath(project_path)))
+
+# change the path according to where you store the adhesive_bonding_simulator
+# https://gitlab.com/piotr.prostko/adhesive_bonding_simulator.git
+adhesive_bonding_model_path = "C:/git/adhesive_bonding_simulator"
 
 n_macroreps = 1
-project_path = 'C:/git/constrained-tpe-main'
 
-# set seed and draw some large integers which will be used as seeds for optimisation runs
+# set seed and draw some large integers which will be used as seeds for optimisation runs (macro reps)
 np.random.seed(389092)
 seed_list = np.random.randint(0, 10**6, size = n_macroreps)
 
-# Start MATLAB engine
+# start MATLAB engine
 eng = matlab.engine.start_matlab()
+eng.addpath(adhesive_bonding_model_path)
 
-eng.addpath("C:\\git\\TPE\\scripts\\bonding_model\\v2_0")
-
+# there are a couple of conditional input parameters in the bonding model,
+# therefore the eval_config object may include different variables across multiple optimisation runs
+# this function ensure the complete set of input variables (the missing ones are calculated using simple logic)
 def get_misc_vars(eval_config):
 
     if eval_config['scenario'] in ['2', '3', '4', '5', '6']:
@@ -96,9 +108,8 @@ def get_misc_vars(eval_config):
                 'posttreatment': posttreatment}
     return var_dict
 
-# function factory is a workaround for not knowing how to pass multiple arguments to the objective function.
-# 'material' variable is required by the bonding simulator, but it's not an optimisation parameter and can't be found in eval_config arg
-
+# function factory (the '_fac' part) is a workaround for not knowing how to pass multiple arguments to the objective function.
+# 'material' variable is required by the bonding simulator, but it's not an optimisation parameter and can't be found in the eval_config argument
 def wrapper_obj_fun_fac(input_material):
     def wrapper_obj_fun(eval_config):
 
@@ -169,7 +180,7 @@ def wrapper_obj_fun_fac(input_material):
                                  eng.double(ind_current_debonding),
                                  eng.double(ind_time_debonding),
                                  nargout=6)
-        return dict(loss = -tensileStrength, c1 = VisualQ, failureMode = failureMode, VisualQ = VisualQ, cost = cost,
+        return dict(loss = -tensileStrength, c1 = VisualQ, failureMode = failureMode, cost = cost,
                     Feasibility = Feasibility, FinalcontactAngle = FinalcontactAngle)
     return wrapper_obj_fun
 
@@ -194,79 +205,78 @@ def run_bonding_model(obj_fun, obj_fun_name, cs, material, seed_list, n_init, n_
                            max_evals = n_iterations,
                            resultfile = nm)
 
-        #opt2 = opt.optimize(logger)
-
-        best_config, best_primary, best_additional = opt.optimize(logger)
+        opt2 = opt.optimize(logger)
 
         # extract optimal x's
         temp = opt2[0]
         tmp_dict = get_misc_vars(temp)
         saved_x.append(temp | tmp_dict)
 
-        opt.additional_metrics
-
-        #outcomes.append([-opt2[1]] + [tensileStrength, failureMode, VisualQ, cost, Feasibility, FinalcontactAngle]) # TPE searches for minimum (but tensileStrength should be maximised), so the wrapper_obj_fun returns minus tensile strength, this is why minus sign here
-
-        print(f'material={material}; macrorep={r+1}; VisualQ={VisualQ}; best_loss={-opt2[1]}')
-
+        outcomes.append([-opt2[1]])
 
     saved_x_df = pd.DataFrame(saved_x)
     saved_x_df = saved_x_df[sorted(saved_x_df.columns)]
 
-    outcomes_df = pd.DataFrame(outcomes, columns=['loss', 'tensileStrength', 'failureMode', 'VisualQ', 'cost', 'Feasibility', 'FinalcontactAngle'])
+    #outcomes_df = pd.DataFrame(outcomes, columns=['loss', 'tensileStrength', 'failureMode', 'VisualQ', 'cost', 'Feasibility', 'FinalcontactAngle'])
+    outcomes_df = pd.DataFrame(outcomes, columns=['loss'])
     outcomes_df['seed'] = seed_list
 
     results_both = pd.concat([saved_x_df, outcomes_df], axis=1)
     results_both.to_excel(f'{project_path}/output/data/adhesive_bonding/{obj_fun_name}_{suffix}_solution.xlsx', index=False)
 
-    if save_iteration_history:
-        # Save intermediate optimization results (all macroreps in one file) into CSV
-        iteration_history = pd.DataFrame()
+    # if save_iteration_history:
+    #     # Save intermediate optimization results (all macroreps in one file) into CSV
+    #     iteration_history = pd.DataFrame()
+    #
+    #     for r in range(1, n_macroreps + 1):
+    #         nm = f'ctpe_bondingmodel_{suffix}_macrorep{r}'
+    #
+    #         with open('./results/' + nm + '.json', 'r') as file:
+    #             temp_intermediate_data = json.load(file)
+    #
+    #         temp_intermediate_data['macrorep'] = [r for _ in range(1, n_iterations + 1)]
+    #         temp_intermediate_data['iteration'] = [i for i in range(1, n_iterations + 1)]
+    #         temp_intermediate_data['loss'] = list(np.array(-1) * temp_intermediate_data['loss'])
+    #
+    #         temp_intermediate_data = pd.DataFrame(temp_intermediate_data)
+    #
+    #         # Calculate cumulative maximum loss considering only rows with c1 == 1
+    #         temp_intermediate_data['cumulative_max_loss'] = (
+    #             temp_intermediate_data[temp_intermediate_data['c1'] == 1]['loss']
+    #             .cummax()
+    #             .reindex(temp_intermediate_data.index, method='ffill')  # Fill NaN for rows where c1 != 1
+    #             .fillna(0)  # Fill initial rows with 0 if no c1 == 1 value is present yet
+    #         )
+    #
+    #         # Derive c1_cumulative_max_loss (c1 corresponding to cumulative_max_loss)
+    #         temp_intermediate_data['c1_cumulative_max_loss'] = temp_intermediate_data.apply(
+    #             lambda row: 1 if row['loss'] == row['cumulative_max_loss'] and row['c1'] == 1 else None,
+    #             axis=1
+    #         ).fillna(method='ffill').fillna(0).astype(int)
+    #
+    #         # Derive best_row_number: row number corresponding to the current cumulative_max_loss
+    #         temp_intermediate_data['best_row_number'] = temp_intermediate_data.apply(
+    #             lambda row:
+    #             temp_intermediate_data.loc[:row.name].query('loss == @row.cumulative_max_loss and c1 == 1').index[-1]
+    #             if row.cumulative_max_loss > 0 else None,
+    #             axis=1
+    #         ).fillna(0).astype(int)
+    #         temp_intermediate_data['best_row_number'] = temp_intermediate_data['best_row_number'] + 1
+    #
+    #         # Concatenate the processed macrorep data to the final DataFrame
+    #         iteration_history = pd.concat([iteration_history, temp_intermediate_data], ignore_index=True)
+    #
+    #     # Save the final aggregated results to CSV
+    #     output_file = os.path.join(f'{project_path}/output/data/adhesive_bonding/',
+    #                                f"bonding_model_material{material}_intermediate_results.csv")
+    #     iteration_history.to_csv(output_file, index=False)
 
-        for r in range(1, n_macroreps + 1):
-            nm = f'ctpe_bondingmodel_{suffix}_macrorep{r}'
+#####################################################################################
+# Run the optimisation n_macroreps times, for each material separately
+#####################################################################################
 
-            with open('./results/' + nm + '.json', 'r') as file:
-                temp_intermediate_data = json.load(file)
-
-            temp_intermediate_data['macrorep'] = [r for _ in range(1, n_iterations + 1)]
-            temp_intermediate_data['iteration'] = [i for i in range(1, n_iterations + 1)]
-            temp_intermediate_data['loss'] = list(np.array(-1) * temp_intermediate_data['loss'])
-
-            temp_intermediate_data = pd.DataFrame(temp_intermediate_data)
-
-            # Calculate cumulative maximum loss considering only rows with c1 == 1
-            temp_intermediate_data['cumulative_max_loss'] = (
-                temp_intermediate_data[temp_intermediate_data['c1'] == 1]['loss']
-                .cummax()
-                .reindex(temp_intermediate_data.index, method='ffill')  # Fill NaN for rows where c1 != 1
-                .fillna(0)  # Fill initial rows with 0 if no c1 == 1 value is present yet
-            )
-
-            # Derive c1_cumulative_max_loss (c1 corresponding to cumulative_max_loss)
-            temp_intermediate_data['c1_cumulative_max_loss'] = temp_intermediate_data.apply(
-                lambda row: 1 if row['loss'] == row['cumulative_max_loss'] and row['c1'] == 1 else None,
-                axis=1
-            ).fillna(method='ffill').fillna(0).astype(int)
-
-            # Derive best_row_number: row number corresponding to the current cumulative_max_loss
-            temp_intermediate_data['best_row_number'] = temp_intermediate_data.apply(
-                lambda row:
-                temp_intermediate_data.loc[:row.name].query('loss == @row.cumulative_max_loss and c1 == 1').index[-1]
-                if row.cumulative_max_loss > 0 else None,
-                axis=1
-            ).fillna(0).astype(int)
-            temp_intermediate_data['best_row_number'] = temp_intermediate_data['best_row_number'] + 1
-
-            # Concatenate the processed macrorep data to the final DataFrame
-            iteration_history = pd.concat([iteration_history, temp_intermediate_data], ignore_index=True)
-
-        # Save the final aggregated results to CSV
-        output_file = os.path.join(f'{project_path}/output/data/adhesive_bonding/',
-                                   f"bonding_model_material{material}_intermediate_results.csv")
-        iteration_history.to_csv(output_file, index=False)
-
-################################################
+# Important note1: from the matlab code of the bonding model, it follows that for each material only selected scenarios are available
+# Important note2: 'Aluminum' was excluded from the analysis because of very discrete nature of results (only ~10 distinct points compared to hundreds, thousands in other materials)
 
 # material_choices = ['ABS', 'PPS', 'GFRE']
 # scenario_choices = [
@@ -295,7 +305,6 @@ for material_idx in range(len(material_choices)):
     cs_bonding_model.add_hyperparameters([scenario, plasma_distance, plasma_passes, plasma_power, plasma_speed, pretreatment])
 
     # the specification of conditions
-
     pretreatment_cond = InCondition(pretreatment, scenario, list(set(['2', '3', '4', '5', '6']) & set(scenario_choices[material_idx])))
 
     # plasma parameters allowed only for scenarios 3 and 6, which are forbidden for aluminum
@@ -381,9 +390,10 @@ for material_idx in range(len(material_choices)):
 #     else:
 #         print(f"No data for material {material}. Skipping...")
 
-###########################
-# explore outcomes' space by evaluating the bonding model on a large number of input points
-###########################
+#####################################################################################
+# Explore the outcome space by evaluating (meaning NO optimisation) the bonding model
+# on a large number of input points
+#####################################################################################
 
 # keep these parameters fixed
 # glue_type = 'Araldite'
