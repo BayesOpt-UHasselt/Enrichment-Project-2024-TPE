@@ -40,8 +40,7 @@ class BaseOptimizer(metaclass=ABCMeta):
         self._obj_func = obj_func
         self._hp_names = list(config_space._hyperparameters.keys())
         self._metric_name = metric_name
-        self._constraints = constraints
-
+        self._constraints = constraints  # Includes c1
         self._config_space = config_space
         self._is_categoricals = {
             hp_name: self._config_space.get_hyperparameter(hp_name).__class__.__name__ == 'CategoricalHyperparameter'
@@ -52,48 +51,70 @@ class BaseOptimizer(metaclass=ABCMeta):
             for hp_name in self._hp_names
         }
 
-    def optimize(self, logger: Logger) -> Tuple[Dict[str, Any], float]:
+        self._best_config = None
+        self._best_loss = float('inf')
+        self._additional_nonoptimised_outcomes = {}
+        self._final_constraints = {}
+
+    def optimize(self, logger: Logger) -> Tuple[Dict[str, Any], float, Dict[str, Any], Dict[str, Any]]:
         """
         Optimize obj_func using TPE Sampler and store the results in the end.
 
         Args:
-            logger (Logger): The logging to write the intermediate results
+            logger (Logger): The logging to write the intermediate results.
 
         Returns:
-            best_config (Dict[str, Any]): The configuration that has the best loss
-            best_loss (float): The best loss value during the optimization
+            best_config (Dict[str, Any]): The configuration that has the best loss.
+            best_loss (float): The best loss value during the optimization.
+            additional_nonoptimised_outcomes (Dict[str, Any]): The additional metrics associated with the best configuration.
+            final_constraints (Dict[str, Any]): The constraint values for the best configuration.
         """
-
-        best_config, best_loss, t = {}, np.inf, 0
-
-        while True:
+        t = 0
+        while t < self._max_evals:
             logger.info(f'\nIteration: {t + 1}')
-            eval_config = self.initial_sample() if t < self.n_init else self.sample()
+            eval_config = self.initial_sample() if t < self._n_init else self.sample()
 
-            results = self.obj_func(eval_config)
-            loss = results[self.metric_name]
+            results = self._obj_func(eval_config)
+            loss = results[self._metric_name]
             self.update(eval_config=eval_config, results=results)
 
             if (
-                best_loss > loss
-                and all(results[obj_name] <= ub for obj_name, ub in self.constraints.items())
+                self._best_loss > loss
+                and all(results[obj_name] <= ub for obj_name, ub in self._constraints.items())
             ):
-                best_loss = loss
-                best_config = eval_config
+                self._best_loss = loss
+                self._best_config = eval_config
+                self._additional_nonoptimised_outcomes = {
+                    key: value for key, value in results.items()
+                    if key not in [self._metric_name] + list(self._constraints.keys())
+                }
+                self._final_constraints = {
+                    key: results[key] for key in self._constraints.keys()
+                }
 
-            results.pop(self.metric_name)
-            logger.info('Cur. loss: {:.5f}, Const.: {}, Cur. Config: {}'.format(loss, results, eval_config))
-            logger.info('Best loss: {:.5f}, Best Config: {}'.format(best_loss, best_config))
+            logger.info(
+                'Cur. loss: {:.5f}, Metrics: {}, Cur. Config: {}'.format(
+                    loss, results, eval_config
+                )
+            )
+            logger.info(
+                'Best loss: {:.5f}, Best Config: {}, Additional Outcomes: {}, Final Constraints: {}'.format(
+                    self._best_loss, self._best_config, self._additional_nonoptimised_outcomes, self._final_constraints
+                )
+            )
             t += 1
 
-            if t >= self.max_evals:
-                break
-
+        # Store final results
         observations = self.fetch_observations()
-        store_results(best_config=best_config, logger=logger,
-                      observations=observations, file_name=self.resultfile)
+        store_results(
+            best_config=self._best_config,
+            logger=logger,
+            observations=observations,
+            file_name=self.resultfile,
+        )
 
-        return best_config, best_loss
+        return self._best_config, self._best_loss, self._additional_nonoptimised_outcomes, self._final_constraints
+
 
     @abstractmethod
     def update(self, eval_config: Dict[str, Any], results: Dict[str, float]) -> None:
@@ -148,6 +169,22 @@ class BaseOptimizer(metaclass=ABCMeta):
         return revert_eval_config(eval_config=eval_config, config_space=self.config_space,
                                   is_categoricals=self.is_categoricals, is_ordinals=self.is_ordinals,
                                   hp_names=self.hp_names)
+
+    @property
+    def best_config(self) -> Optional[Dict[str, Any]]:
+        return self._best_config
+
+    @property
+    def best_loss(self) -> float:
+        return self._best_loss
+
+    @property
+    def additional_nonoptimised_outcomes(self) -> Dict[str, Any]:
+        return self._additional_nonoptimised_outcomes
+
+    @property
+    def final_constraints(self) -> Dict[str, Any]:
+        return self._final_constraints
 
     @property
     def config_space(self) -> CS.ConfigurationSpace:

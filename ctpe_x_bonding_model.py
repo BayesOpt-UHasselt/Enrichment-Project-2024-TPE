@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(project_path)))
 # https://gitlab.com/piotr.prostko/adhesive_bonding_simulator.git
 adhesive_bonding_model_path = "C:/git/adhesive_bonding_simulator"
 
-n_macroreps = 1
+n_macroreps = 2
 
 # set seed and draw some large integers which will be used as seeds for optimisation runs (macro reps)
 np.random.seed(389092)
@@ -205,20 +205,19 @@ def run_bonding_model(obj_fun, obj_fun_name, cs, material, seed_list, n_init, n_
                            max_evals = n_iterations,
                            resultfile = nm)
 
-        opt2 = opt.optimize(logger)
+        best_config, best_loss, additional_nonoptimised_outcomes, final_constraints = opt.optimize(logger)
 
         # extract optimal x's
-        temp = opt2[0]
+        temp = best_config
         tmp_dict = get_misc_vars(temp)
         saved_x.append(temp | tmp_dict)
 
-        outcomes.append([-opt2[1]])
+        outcomes.append([-best_loss] + list(additional_nonoptimised_outcomes.values()) + list(final_constraints.values()))
 
     saved_x_df = pd.DataFrame(saved_x)
     saved_x_df = saved_x_df[sorted(saved_x_df.columns)]
 
-    #outcomes_df = pd.DataFrame(outcomes, columns=['loss', 'tensileStrength', 'failureMode', 'VisualQ', 'cost', 'Feasibility', 'FinalcontactAngle'])
-    outcomes_df = pd.DataFrame(outcomes, columns=['loss'])
+    outcomes_df = pd.DataFrame(outcomes, columns=['loss'] + list(additional_nonoptimised_outcomes.keys()) + list(final_constraints.keys()))
     outcomes_df['seed'] = seed_list
 
     results_both = pd.concat([saved_x_df, outcomes_df], axis=1)
@@ -278,14 +277,11 @@ def run_bonding_model(obj_fun, obj_fun_name, cs, material, seed_list, n_init, n_
 # Important note1: from the matlab code of the bonding model, it follows that for each material only selected scenarios are available
 # Important note2: 'Aluminum' was excluded from the analysis because of very discrete nature of results (only ~10 distinct points compared to hundreds, thousands in other materials)
 
-# material_choices = ['ABS', 'PPS', 'GFRE']
-# scenario_choices = [
-#     ['1', '2', '3'],
-#     ['1', '2', '3'],
-#     ['1', '2', '3', '4', '5', '6']]
-
-material_choices = ['PPS']
-scenario_choices = [[ '1', '2', '3' ]]
+material_choices = ['ABS', 'PPS', 'GFRE']
+scenario_choices = [
+    ['1', '2', '3'],
+    ['1', '2', '3'],
+    ['1', '2', '3', '4', '5', '6']]
 
 for material_idx in range(len(material_choices)):
 
