@@ -179,6 +179,7 @@ def wrapper_obj_fun_fac(input_material):
         roughening = tmp_dict.get('roughening')
         posttreatment = tmp_dict.get('posttreatment')
 
+        # to limit the number of optimisation parameters (and make the optimisation problem easier), it was decided to fix the parameters below
         scenario = int(eval_config['scenario'])
         glue_type = 'Araldite'
         sample_size = 25
