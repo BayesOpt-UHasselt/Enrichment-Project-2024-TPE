@@ -23,7 +23,7 @@ seed_list = np.random.randint(0, 10 ** 6, size=n_macroreps)
 # Note2: 'Aluminum' was excluded from the analysis because of very discrete nature of results (only ~10 distinct
 # points compared to hundreds, thousands for other materials)
 
-config_ABS = create_config_space('ABS', ['1', '2', '3'])
+config_ABS = create_config_space('ABS')
 run_optimisation(material='ABS',
                  obj_fun=wrapper_obj_fun_fac('ABS'),
                  config_space=config_ABS,
@@ -33,7 +33,7 @@ run_optimisation(material='ABS',
                  n_macroreps=n_macroreps,
                  save_iteration_history=True)
 
-config_PPS = create_config_space('PPS', ['1', '2', '3'])
+config_PPS = create_config_space('PPS')
 run_optimisation(material='PPS',
                  obj_fun=wrapper_obj_fun_fac('PPS'),
                  config_space=config_PPS,
@@ -43,7 +43,7 @@ run_optimisation(material='PPS',
                  n_macroreps=n_macroreps,
                  save_iteration_history=True)
 
-config_GFRE = create_config_space('GFRE', ['1', '2', '3', '4', '5', '6'])
+config_GFRE = create_config_space('GFRE')
 run_optimisation(material='GFRE',
                  obj_fun=wrapper_obj_fun_fac('GFRE'),
                  config_space=config_GFRE,
