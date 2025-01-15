@@ -3,56 +3,37 @@ library(ggplot2)
 
 setwd('C:/git/hpo_ctpe_forsharing')
 
-#materials = c('ABS', 'PPS', 'GFRE')
-materials = c('ABS')
+materials = c('ABS', 'PPS', 'GFRE')
 h4 <- hcl.colors(10, palette = "Fall")
 cm_to_inch = 0.393701
 
 # debonding strength vs cost graph ----------------------------------------------
 
-dat <- map(materials, ~read_xlsx(paste0('./results/adhesive_bonding_manyeval_material_', ., '.csv'))) %>% 
-  bind_rows(.id = 'material') %>% 
-  mutate(plasma_distance = dplyr::coalesce(plasma_distance, plasma_distance_value),
-         plasma_passes = dplyr::coalesce(plasma_passes, plasma_passes_value),
-         plasma_power = dplyr::coalesce(plasma_power, plasma_power_value),
-         plasma_speed = dplyr::coalesce(plasma_speed, plasma_speed_value)) %>% 
-  select(!ends_with('value'))
+dat <- map(materials, ~read_csv(paste0('./results/adhesive_bonding_manyeval_material', ., '.csv'))) %>% 
+  bind_rows(.id = 'material') 
 
 dat$material <- factor(materials[as.numeric(dat$material)])
 
-dat %>% 
-  group_by(material) %>% 
-  filter(VisualQ == 1) %>% 
-  tally()/20000
+dat$type <-  'outcome space'
 
 dat <- dat %>% 
   filter(VisualQ == 1)
 
-optim_dat <- map(materials, ~read_xlsx(paste0('./adhesive_bonding_optimal_parameters_material', ., '.csv'))) %>% 
+optim_dat <- map(materials, ~read_csv(paste0('./results/adhesive_bonding_optimal_parameters_material', ., '.csv'))) %>% 
   bind_rows(.id = 'material') %>% 
-  mutate(plasma_distance = dplyr::coalesce(plasma_distance, plasma_distance_value),
-         plasma_passes = dplyr::coalesce(plasma_passes, plasma_passes_value),
-         plasma_power = dplyr::coalesce(plasma_power, plasma_power_value),
-         plasma_speed = dplyr::coalesce(plasma_speed, plasma_speed_value)) %>% 
-  select(!ends_with('value'))
+  mutate(tensileStrength = loss,
+         VisualQ = c1)
+
 optim_dat$material <- materials[as.numeric(optim_dat$material)]
 
-# all optim values have VisualQ ==2?
-
-optim_dat %>% 
-  group_by(material) %>% 
-  filter(VisualQ == 2) %>% 
-  tally()/30
-
-dat$type <-  'outcome space'
 optim_dat$type <-  'TPE-optimised'
 
 dat_eval_optim <- bind_rows(dat, optim_dat)
-dat_eval_optim$material <- fct_relevel(dat_eval_optim$material, c('ABS', 'PPS', 'GFRE'))
+dat_eval_optim$material <- fct_relevel(dat_eval_optim$material, materials)
 
 p1 <- dat_eval_optim %>%
   filter(material != 'Aluminum') %>%
-  ggplot(aes(x = cost, y = tensileStrength, colour = type, size = type, shape = as.character(VisualQ))) +
+  ggplot(aes(x = cost, y = tensileStrength, colour = type, size = type)) +
   geom_point() +
   scale_colour_manual(values = c('outcome space' = alpha(h4[1], 0.6),
                                  'TPE-optimised' = h4[10])) +
@@ -70,10 +51,10 @@ p1 <- dat_eval_optim %>%
         axis.text.x = element_text(size = 12),
         axis.text.y = element_text(size = 12),
         plot.title = element_text(size = 16, face = "bold")) +
-  labs(x = "Cost", y = "Bonding strength", title = "The outcome space (20 000 random evaluations, but only VisualQ=OK kept) and TPE-optimised values (30 replications) of bonding strength and cost")
+  labs(x = "Cost", y = "Bonding strength", title = "The outcome space (~3 000 random evaluations with VisualQ=OK) and TPE-optimised values (30 replications)")
 
 # Save the updated plot
-ggsave(filename = './strength_vs_cost_plots.png',
+ggsave(filename = './results/strength_vs_cost.png',
        plot = p1,
        device = 'png',
        units = "in",
