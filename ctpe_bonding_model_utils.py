@@ -237,7 +237,6 @@ def wrapper_obj_fun_fac(input_material):
         # failureMode, cost, Feasibility, FinalcontactAngle are additional non-optimised outcomes that also are returned
         return dict(loss=-tensileStrength, c1=VisualQ, failureMode=failureMode, cost=cost,
                     Feasibility=Feasibility, FinalcontactAngle=FinalcontactAngle)
-
     return wrapper_obj_fun
 
 def run_optimisation(material, obj_fun, config_space, seed_list, n_init, n_iterations, n_macroreps, save_iteration_history=False):
@@ -340,3 +339,32 @@ def run_optimisation(material, obj_fun, config_space, seed_list, n_init, n_itera
         # Save the final aggregated results to CSV
         output_file = os.path.join(f'./results/adhesive_bonding_material{material}_intermediate_results.csv')
         iteration_history.to_csv(output_file, index=False)
+def run_wo_optimisation(material, obj_fun, config_space, n_evaluations):
+
+    # create objects for storing results
+    results = []
+    saved_x = []
+
+    for r in range(n_evaluations):
+
+        eval_config = config_space.sample_configuration()
+        tmp_dict = get_all_input_vars(eval_config)
+        saved_x.append(eval_config.get_dictionary() | tmp_dict)
+
+        out=obj_fun(eval_config)
+        tensileStrength = -out.get('loss')
+        VisualQ=out.get('c1')
+        failureMode=out.get('failureMode')
+        cost=out.get('cost')
+        Feasibility=out.get('Feasibility')
+        FinalcontactAngle=out.get('FinalcontactAngle')
+
+        results.append([tensileStrength, VisualQ, failureMode, cost, Feasibility, FinalcontactAngle])
+
+    results_df=pd.DataFrame(results, columns = ['tensileStrength', 'VisualQ', 'failureMode', 'cost', 'Feasibility', 'FinalcontactAngle'], )
+
+    saved_x_df = pd.DataFrame(saved_x)
+    saved_x_df = saved_x_df[sorted(saved_x_df.columns)]
+
+    results_both = pd.concat([saved_x_df, results_df], axis = 1)
+    results_both.to_csv(f'./results/adhesive_bonding_manyeval_material{material}.csv', index=False)
