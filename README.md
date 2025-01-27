@@ -1,5 +1,5 @@
 # Enrichment-Project-2024-TPE
-This repository contains the files necessary to run the TPE-based Bayesian Optimization approach on teh adhesivebonding simulator. The code was developed within the Enrichment Project 2024 sppoted by the FAIR program.
+This repository contains the files necessary to run the TPE-based Bayesian Optimization approach on the adhesive bonding simulator. The code was developed within the Enrichment Project 2024, supported by the FAIR program.
 
 # Constrained Tree-structured Parzen Estimator (cTPE)
 We use cTPE to optimise selected parameters of the adhesive bonding simulator. More information on the optimization method itself can be found in the [source repository](https://github.com/nabenabe0928/constrained-tpe) or in the manuscript:
