@@ -23,7 +23,7 @@ The information below originates directly from the cTPE author:
 > ...
 
 Therefore, when installing cTPE, you may encounter potential difficulties such as version conflicts of the dependencies. 
-However, this does not imply that the provided code is flawed. Troubleshooting based on web resources and downgrading selected packages should alleviate these issues.  
+However, this does not imply that the provided code is flawed. Troubleshooting based on web resources (or [troubleshooting.docx](./troubleshooting.docx)) and downgrading selected packages should alleviate these issues.  
 
 # Repository structure
 
